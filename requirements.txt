@@ -1,0 +1,3 @@
+python-dotenv
+uptime-kuma-api
+fastmcp
