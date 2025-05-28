@@ -1,3 +1,4 @@
-python-dotenv
-uptime-kuma-api
-fastmcp
+python-dotenv==1.1.0
+uptime-kuma-api==1.2.1
+fastmcp==2.5.1
+pydantic==2.11.5
