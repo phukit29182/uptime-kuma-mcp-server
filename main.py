@@ -340,44 +340,55 @@ async def get_status_page(slug: str = Field(description="The slug of the status 
         raise
 
 @mcp.tool()
-async def get_heartbeats(offset: int = Field(default=0, description="Offset for pagination."),
-                         limit: int = Field(default=100, description="Limit for number of heartbeats to return per page.")):
+async def get_heartbeats(
+    monitor_id: int = Field(description="The ID of the monitor to retrieve heartbeats for."),
+    hours: int = Field(default=24, description="Period time in hours from now to retrieve beats for (e.g., 1 for last hour, 24 for last day)."),
+    offset: int = Field(default=0, description="Offset for paginating the returned heartbeats list."),
+    limit: int = Field(default=100, description="Limit for number of heartbeats to return per page from the fetched list.")
+):
     """
-    Retrieves heartbeat monitor data with pagination.
-    Note: This tool fetches all heartbeats from Uptime Kuma first, then applies pagination.
+    Retrieves heartbeats for a specific monitor within a given time range (in hours from now),
+    then applies pagination to the results.
     """
     try:
         api = await login_uptime_kuma()
 
-        def _get_heartbeats_sync(p_offset, p_limit):
+        def _get_heartbeats_for_monitor_sync(mid, num_hours, p_offset, p_limit):
             try:
-                logger.info("Attempting to retrieve all heartbeats.")
-                heartbeats_data = api.get_heartbeats()
-                total_heartbeats = len(heartbeats_data)
-                logger.info(f"Successfully retrieved {total_heartbeats} heartbeats from Uptime Kuma API.")
+                logger.info(f"Attempting to retrieve heartbeats for monitor ID: {mid} for the last {num_hours} hours.")
+                heartbeats_for_monitor = api.get_heartbeats(monitor_id=mid, hours=num_hours)
+                total_fetched_for_monitor = len(heartbeats_for_monitor)
+                logger.info(f"Successfully retrieved {total_fetched_for_monitor} heartbeats for monitor ID {mid} for the specified {num_hours} hours.")
 
-                # Apply pagination
                 start_index = p_offset
                 end_index = p_offset + p_limit
-                paginated_heartbeats = heartbeats_data[start_index:end_index]
-                
-                logger.info(f"Returning {len(paginated_heartbeats)} heartbeats after pagination (offset: {p_offset}, limit: {p_limit}).")
-                return {"status": "success",
-                        "data": paginated_heartbeats,
-                        "total_available": total_heartbeats,
-                        "count_returned": len(paginated_heartbeats),
-                        "offset": p_offset,
-                        "limit": p_limit}
-            except Exception as e_sync:
-                logger.error(f"Error retrieving heartbeats (sync part): {str(e_sync)}")
-                return {"status": "error", "error_message": str(e_sync)}
+                paginated_heartbeats = heartbeats_for_monitor[start_index:end_index]
 
-        loop = asyncio.get_running_loop() if hasattr(asyncio, 'get_running_loop') else asyncio.get_event_loop()
-        result = await loop.run_in_executor(None, _get_heartbeats_sync, offset, limit)
+                logger.info(f"Returning {len(paginated_heartbeats)} heartbeats after pagination (offset: {p_offset}, limit: {p_limit}) for monitor ID {mid}.")
+                return {
+                    "status": "success",
+                    "monitor_id": mid,
+                    "hours_queried": num_hours,
+                    "data": paginated_heartbeats,
+                    "total_fetched_for_this_monitor_and_period": total_fetched_for_monitor,
+                    "count_returned": len(paginated_heartbeats),
+                    "offset": p_offset,
+                    "limit": p_limit
+                }
+            except Exception as e_sync:
+                logger.error(f"Error retrieving heartbeats for monitor ID {mid} (sync part): {str(e_sync)}")
+                return {"status": "error", "monitor_id": mid, "error_message": str(e_sync)}
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.get_event_loop()
+
+        result = await loop.run_in_executor(None, _get_heartbeats_for_monitor_sync, monitor_id, hours, offset, limit)
         return result
 
     except Exception as e:
-        logger.error(f"Error occurred while getting all heartbeats: {str(e)}")
+        logger.error(f"Error occurred while getting monitor beats for ID {monitor_id}: {str(e)}")
         raise
 
 @mcp.tool()
