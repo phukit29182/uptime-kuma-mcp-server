@@ -49,29 +49,6 @@ The server exposes the following tools:
     source venv/bin/activate
     pip install -r requirements.txt
     ```
-    Create a `requirements.txt` file in the project root with the following content:
-    ```
-    pydantic
-    python-dotenv
-    uptime-kuma-api
-    # Add the mcp.server.fastmcp dependency here.
-    # This might be part of a larger package or a custom library.
-    # Example: some-mcp-package
-    ```
-    *Note: The `mcp.server.fastmcp` dependency needs to be specified correctly based on how it's distributed. If it's a local module, ensure it's in the `PYTHONPATH` or installed.*
-
-3.  **Configure Environment Variables:**
-    Create a `.env` file in the root directory of the project with the following variables:
-    ```env
-    KUMA_URL="YOUR_UPTIME_KUMA_URL"                 # e.g., http://localhost:3001
-    KUMA_USERNAME="YOUR_UPTIME_KUMA_USERNAME"
-    KUMA_PASSWORD="YOUR_UPTIME_KUMA_PASSWORD"
-
-    # Optional: For SSE transport mode (if you modify main.py to use main_sse())
-    # MCP_HOST="0.0.0.0"
-    # MCP_PORT="8000"
-    ```
-    Replace the placeholder values with your actual Uptime Kuma details.
 
 ## Running the Server
 
