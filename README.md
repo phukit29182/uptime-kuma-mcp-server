@@ -17,7 +17,7 @@ The server exposes the following tools:
 *   **`add_monitor_tag`**: Adds a tag to a specific monitor.
 *   **`delete_monitor_tag`**: Deletes a tag from a specific monitor.
 *   **`get_status_page`**: Retrieves details for a specific status page.
-*   **`get_heartbeats`**: Retrieves all heartbeat data (with server-side pagination).
+*   **`get_heartbeats`**: Retrieves heartbeats for a specific monitor within a time range, with pagination.
 *   **`get_tags`**: Retrieves all tags defined in Uptime Kuma.
 
 ## How it Works
