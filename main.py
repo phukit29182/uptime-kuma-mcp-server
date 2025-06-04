@@ -27,14 +27,14 @@ async def login_uptime_kuma() -> UptimeKumaApi:
     if not all([kuma_url, kuma_username, kuma_password]):
         error_msg = "KUMA_URL, KUMA_USERNAME, or KUMA_PASSWORD environment variables are not set."
         logger.error(error_msg)
-        raise ValueError(error_msg) # Fail early if config is missing
+        raise ValueError(error_msg)
     api = UptimeKumaApi(kuma_url)
     try:
         api.login(kuma_username, kuma_password)
         logger.info("Successfully logged in to Uptime Kuma API.")
     except Exception as e:
         logger.error(f"Failed to login to Uptime Kuma: {e}")
-        raise # Re-raise to let the MCP tool handler know something went wrong
+        raise
     return api
 
 @mcp.tool()
@@ -135,7 +135,7 @@ async def pause_monitor(monitor_id: int = Field(description="The ID of the monit
         def _pause_monitor_sync(mid):
             try:
                 logger.info(f"Attempting to pause monitor ID: {mid}")
-                response = api.pause_monitor(monitor_id=mid) # Corrected to use mid
+                response = api.pause_monitor(monitor_id=mid)
                 logger.info(f"Response for pausing monitor ID {mid}: {response}")
                 if response.get("ok"):
                     return {"id": mid, "status": "success", "message": response.get("msg", "Paused successfully."), "response": response}
@@ -157,7 +157,7 @@ async def pause_monitor(monitor_id: int = Field(description="The ID of the monit
 
     except Exception as e:
         logger.error(f"Error occurred while pausing monitor ID {monitor_id}: {str(e)}")
-        raise # Re-raise for MCP framework to handle
+        raise
 
 @mcp.tool()
 async def resume_monitor(monitor_id: int = Field(description="The ID of the monitor to resume.")):
@@ -170,7 +170,7 @@ async def resume_monitor(monitor_id: int = Field(description="The ID of the moni
         def _resume_monitor_sync(mid):
             try:
                 logger.info(f"Attempting to resume monitor ID: {mid}")
-                response = api.resume_monitor(monitor_id=mid) # Corrected to use mid
+                response = api.resume_monitor(monitor_id=mid)
                 logger.info(f"Response for resuming monitor ID {mid}: {response}")
                 if response.get("ok"):
                     return {"id": mid, "status": "success", "message": response.get("msg", "Resumed successfully."), "response": response}
@@ -186,7 +186,7 @@ async def resume_monitor(monitor_id: int = Field(description="The ID of the moni
         return result
     except Exception as e:
         logger.error(f"Error occurred while resuming monitor ID {monitor_id}: {str(e)}")
-        raise # Re-raise for MCP framework to handle
+        raise
 
 @mcp.tool()
 async def get_monitor_beats(monitor_id: int = Field(description="The ID of the monitor."),
@@ -200,7 +200,6 @@ async def get_monitor_beats(monitor_id: int = Field(description="The ID of the m
         def _get_monitor_beats_sync(mid, num_hours):
             try:
                 logger.info(f"Attempting to retrieve beats for monitor ID: {mid} for the last {num_hours} hours.")
-                # The uptime-kuma-api expects monitor_id and hours as positional arguments
                 beats = api.get_monitor_beats(mid, num_hours)
                 logger.info(f"Successfully retrieved {len(beats)} beats for monitor ID {mid}.")
                 return {"id": mid, "status": "success", "beats": beats, "count": len(beats)}
@@ -415,6 +414,204 @@ async def get_tags():
 
     except Exception as e:
         logger.error(f"Error occurred while getting all tags: {str(e)}")
+        raise
+
+@mcp.tool()
+async def create_tag(name: str = Field(description="The name of the new tag.")):
+    """
+    Creates a new tag in Uptime Kuma.
+    """
+    try:
+        api = await login_uptime_kuma()
+
+        def _create_tag_sync(tag_name):
+            try:
+                logger.info(f"Attempting to create tag: {tag_name}")
+                response = api.add_tag(name=tag_name)
+                logger.info(f"Response for creating tag '{tag_name}': {response}")
+                if response.get("ok"):
+                    return {"name": tag_name, "status": "success", "message": response.get("msg", "Tag created successfully."), "response": response}
+                else:
+                    error_msg = response.get("msg", "Unknown error from API during tag creation")
+                    logger.warning(f"Tag '{tag_name}' possibly not created. API response: {response}")
+                    return {"name": tag_name, "status": "failed", "error_message": error_msg, "response": response}
+            except Exception as e_sync:
+                logger.error(f"Error creating tag '{tag_name}' (sync part): {str(e_sync)}")
+                return {"name": tag_name, "status": "error", "error_message": str(e_sync)}
+
+        loop = asyncio.get_running_loop() if hasattr(asyncio, 'get_running_loop') else asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, _create_tag_sync, name)
+        return result
+
+    except Exception as e:
+        logger.error(f"Error occurred while creating tag '{name}': {str(e)}")
+        raise
+
+@mcp.tool()
+async def edit_tag(tag_id: int = Field(description="The ID of the tag to edit."),
+                   new_name: str = Field(description="The new name for the tag.")):
+    """
+    Edits the name of an existing tag in Uptime Kuma.
+    """
+    try:
+        api = await login_uptime_kuma()
+
+        def _edit_tag_sync(tid, new_tag_name):
+            try:
+                logger.info(f"Attempting to edit tag ID: {tid} to new name: {new_tag_name}")
+                response = api.edit_tag(tag_id=tid, name=new_tag_name)
+                logger.info(f"Response for editing tag ID {tid}: {response}")
+                if response.get("ok"):
+                    return {"id": tid, "new_name": new_tag_name, "status": "success", "message": response.get("msg", "Tag edited successfully."), "response": response}
+                else:
+                    error_msg = response.get("msg", "Unknown error from API during tag edit")
+                    logger.warning(f"Tag ID {tid} possibly not edited. API response: {response}")
+                    return {"id": tid, "new_name": new_tag_name, "status": "failed", "error_message": error_msg, "response": response}
+            except Exception as e_sync:
+                logger.error(f"Error editing tag ID {tid} (sync part): {str(e_sync)}")
+                return {"id": tid, "new_name": new_tag_name, "status": "error", "error_message": str(e_sync)}
+
+        loop = asyncio.get_running_loop() if hasattr(asyncio, 'get_running_loop') else asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, _edit_tag_sync, tag_id, new_name)
+        return result
+
+    except Exception as e:
+        logger.error(f"Error occurred while editing tag ID {tag_id}: {str(e)}")
+        raise
+
+@mcp.tool()
+async def delete_tag(tag_id: int = Field(description="The ID of the tag to delete.")):
+    """
+    Deletes a tag from Uptime Kuma.
+    """
+    try:
+        api = await login_uptime_kuma()
+
+        def _delete_tag_sync(tid):
+            try:
+                logger.info(f"Attempting to delete tag ID: {tid}")
+                response = api.delete_tag(tag_id=tid)
+                logger.info(f"Response for deleting tag ID {tid}: {response}")
+                if response.get("ok"):
+                    return {"id": tid, "status": "success", "message": response.get("msg", "Tag deleted successfully."), "response": response}
+                else:
+                    error_msg = response.get("msg", "Unknown error from API during tag deletion")
+                    logger.warning(f"Tag ID {tid} possibly not deleted. API response: {response}")
+                    return {"id": tid, "status": "failed", "error_message": error_msg, "response": response}
+            except Exception as e_sync:
+                logger.error(f"Error deleting tag ID {tid} (sync part): {str(e_sync)}")
+                return {"id": tid, "status": "error", "error_message": str(e_sync)}
+
+        loop = asyncio.get_running_loop() if hasattr(asyncio, 'get_running_loop') else asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, _delete_tag_sync, tag_id)
+        return result
+
+    except Exception as e:
+        logger.error(f"Error occurred while deleting tag ID {tag_id}: {str(e)}")
+        raise
+
+@mcp.tool()
+async def create_status_page(name: str = Field(description="The name of the new status page."),
+                             slug: str = Field(description="The unique slug for the status page (used in URL)."),
+                             title: str = Field(None, description="The title displayed on the status page."),
+                             description: str = Field(None, description="A description for the status page."),
+                             ):
+    """
+    Creates a new status page in Uptime Kuma.
+    """
+    try:
+        api = await login_uptime_kuma()
+
+        def _create_status_page_sync(sp_name, sp_slug, sp_title, sp_description):
+            try:
+                logger.info(f"Attempting to create status page: '{sp_name}' with slug '{sp_slug}'")
+                options = {
+                    "title": sp_title,
+                    "description": sp_description,
+                }
+                options = {k: v for k, v in options.items() if v is not None}
+
+                response = api.add_status_page(name=sp_name, slug=sp_slug, **options)
+                logger.info(f"Response for creating status page '{sp_name}': {response}")
+                if response.get("ok"):
+                    return {"name": sp_name, "slug": sp_slug, "status": "success", "message": response.get("msg", "Status page created successfully."), "response": response}
+                else:
+                    error_msg = response.get("msg", "Unknown error from API during status page creation")
+                    logger.warning(f"Status page '{sp_name}' possibly not created. API response: {response}")
+                    return {"name": sp_name, "slug": sp_slug, "status": "failed", "error_message": error_msg, "response": response}
+            except Exception as e_sync:
+                logger.error(f"Error creating status page '{sp_name}' (sync part): {str(e_sync)}")
+                return {"name": sp_name, "slug": sp_slug, "status": "error", "error_message": str(e_sync)}
+
+        loop = asyncio.get_running_loop() if hasattr(asyncio, 'get_running_loop') else asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, _create_status_page_sync, name, slug, title, description)
+        return result
+
+    except Exception as e:
+        logger.error(f"Error occurred while creating status page '{name}': {str(e)}")
+        raise
+
+@mcp.tool()
+async def edit_status_page(slug: str = Field(description="The slug of the status page to edit."),
+                           options: dict = Field(description="Dictionary of status page attributes to update (e.g., name, title, description).")):
+    """
+    Edits an existing status page in Uptime Kuma.
+    """
+    try:
+        api = await login_uptime_kuma()
+
+        def _edit_status_page_sync(sp_slug, sp_options):
+            try:
+                logger.info(f"Attempting to edit status page with slug: {sp_slug} with options: {sp_options}")
+                response = api.edit_status_page(slug=sp_slug, **sp_options)
+                logger.info(f"Response for editing status page '{sp_slug}': {response}")
+                if response.get("ok"):
+                    return {"slug": sp_slug, "status": "success", "message": response.get("msg", "Status page edited successfully."), "response": response}
+                else:
+                    error_msg = response.get("msg", "Unknown error from API during status page edit")
+                    logger.warning(f"Status page '{sp_slug}' possibly not edited. API response: {response}")
+                    return {"slug": sp_slug, "status": "failed", "error_message": error_msg, "response": response}
+            except Exception as e_sync:
+                logger.error(f"Error editing status page with slug {sp_slug} (sync part): {str(e_sync)}")
+                return {"slug": sp_slug, "status": "error", "error_message": str(e_sync)}
+
+        loop = asyncio.get_running_loop() if hasattr(asyncio, 'get_running_loop') else asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, _edit_status_page_sync, slug, options)
+        return result
+
+    except Exception as e:
+        logger.error(f"Error occurred while editing status page with slug {slug}: {str(e)}")
+        raise
+
+@mcp.tool()
+async def delete_status_page(slug: str = Field(description="The slug of the status page to delete.")):
+    """
+    Deletes a status page from Uptime Kuma.
+    """
+    try:
+        api = await login_uptime_kuma()
+
+        def _delete_status_page_sync(sp_slug):
+            try:
+                logger.info(f"Attempting to delete status page with slug: {sp_slug}")
+                response = api.delete_status_page(slug=sp_slug)
+                logger.info(f"Response for deleting status page '{sp_slug}': {response}")
+                if response.get("ok"):
+                    return {"slug": sp_slug, "status": "success", "message": response.get("msg", "Status page deleted successfully."), "response": response}
+                else:
+                    error_msg = response.get("msg", "Unknown error from API during status page deletion")
+                    logger.warning(f"Status page '{sp_slug}' possibly not deleted. API response: {response}")
+                    return {"slug": sp_slug, "status": "failed", "error_message": error_msg, "response": response}
+            except Exception as e_sync:
+                logger.error(f"Error deleting status page with slug {sp_slug} (sync part): {str(e_sync)}")
+                return {"slug": sp_slug, "status": "error", "error_message": str(e_sync)}
+
+        loop = asyncio.get_running_loop() if hasattr(asyncio, 'get_running_loop') else asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, _delete_status_page_sync, slug)
+        return result
+
+    except Exception as e:
+        logger.error(f"Error occurred while deleting status page with slug {slug}: {str(e)}")
         raise
 
 def main_stdio():
